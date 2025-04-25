@@ -5,11 +5,14 @@ import settings as s                           # Importiert globale Konstanten (
 
 spieler_daten = {                              # Startpositionen für Spieler 0 und 1
     0: (100, s.SCREEN_HEIGHT - 40),            # Spieler 0 startet links unten
-    1: (600, s.SCREEN_HEIGHT - 40)             # Spieler 1 startet rechts unten
+    1: (600, s.SCREEN_HEIGHT - 40),             # Spieler 1 startet rechts unten
+    2: (100, s.SCREEN_HEIGHT - 80),            # Spieler 2 startet links unten
+    3: (600, s.SCREEN_HEIGHT - 80)             # Spieler 3 startet rechts unten
 }
 
 verbindungen = []                              # Liste aller aktiven Verbindungen
-spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40)]  # Positionen beider Spieler
+spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40),
+                (100, s.SCREEN_HEIGHT - 80), (600, s.SCREEN_HEIGHT - 80)]  # Positionen beider Spieler
 
 
 def client_thread(conn, spieler_id):           # Funktion für die Client-Verarbeitung in einem Thread
@@ -33,11 +36,11 @@ def client_thread(conn, spieler_id):           # Funktion für die Client-Verarb
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Erstelle ein TCP/IP-Server-Socket
 server.bind(("0.0.0.0", 65432))                # Binde Server an alle Netzwerkinterfaces, Port 65432
-server.listen(2)                               # Warte auf bis zu 2 gleichzeitige Verbindungen
+server.listen(4)                               # Warte auf bis zu 2 gleichzeitige Verbindungen
 print("Server gestartet")                      # Bestätigung auf der Konsole
 
 spieler_id = 0                                 # Start-ID für erste Verbindung
-while spieler_id < 2:                          # Erlaube maximal zwei Spieler
+while spieler_id < 4:                          # Erlaube maximal zwei Spieler
     conn, addr = server.accept()              # Warte auf eingehende Verbindung
     print(f"Spieler {spieler_id} verbunden: {addr}")  # Gib verbundene IP-Adresse aus
     verbindungen.append(conn)                 # Speichere die Verbindung

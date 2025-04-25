@@ -11,10 +11,12 @@ pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den
 clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
-sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
+sock.connect(('192.168.2.210', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
 # Spielerobjekte werden erzeugt – Startpositionen kommen gleich vom Server
-spieler = Player((0, 0), color=s.GREEN)         # Lokaler Spieler (grün)
+spieler = Player((0, 0), color=s.GREEN) 
+spieler2 = Player((0, 0), color=s.RED) 
+spieler3 = Player((0, 0), color=s.YELLOW)         # Lokaler Spieler (grün)
 gegner = Player((0, 0), color=s.BLUE)           # Gegner (blau)
 
 running = True                                  # Spielschleife aktiv
@@ -38,10 +40,14 @@ while running:
 
     daten = pickle.loads(sock.recv(2048))       # Empfange aktualisierte Positionen vom Server
     spieler.rect.topleft = daten[0]             # Setze eigene Position
-    gegner.rect.topleft = daten[1]              # Setze Gegnerposition
+    gegner.rect.topleft = daten[1]              # Setze Gegnerposition 
+    spieler2.rect.topleft = daten[2]            # Setze Gegnerposition
+    spieler3.rect.topleft = daten[3]            # Setze Gegnerposition
 
     spieler.zeichnen(window)                    # Zeichne eigenen Spieler
-    gegner.zeichnen(window)                     # Zeichne Gegner
+    gegner.zeichnen(window) 
+    spieler2.zeichnen(window)                    # Zeichne Gegner
+    spieler3.zeichnen(window)                    # Zeichne Gegner
     pygame.display.update()                     # Aktualisiere Bildschirm
 
 pygame.quit()                                   # Beende Pygame

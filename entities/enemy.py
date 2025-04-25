@@ -14,3 +14,4 @@ class Enemy:
 
     def zeichnen(self, surface):
         surface.blit(self.image, self.rect)
+
