@@ -7,6 +7,7 @@ from entities.player import Player            # Importiert die Spielerklasse
 import random
 from entities.enemy import Enemy
 from entities.menu import Menu                # Importiert die Menüklasse
+from entities.bullet import Bullet            # Importiert die Bullet-Klasse
 
 pygame.init()                                 # Initialisiert alle Pygame-Module
 window = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))  # Erzeugt das Spiel-Fenster
@@ -33,6 +34,9 @@ menu = Menu(window)
 # Zeige das Menü am Anfang des Spiels
 menu.anzeigen()
 
+# Liste für Projektile
+bullets = []
+
 running = True                                  # Spielschleife aktiv
 while running:
     clock.tick(s.FPS)                           # Begrenze Framerate auf z. B. 60 FPS
@@ -41,6 +45,10 @@ while running:
     for event in pygame.event.get():            # Ereignisschleife
         if event.type == pygame.QUIT:           # Wenn das Fenster geschlossen wird
             running = False                     # Spielschleife beenden
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and spieler.alive:  # Schießen mit Leertaste
+                bullet = Bullet(spieler.rect.centerx, spieler.rect.top)
+                bullets.append(bullet)
 
     # Bewegungseingaben verarbeiten
     keys = pygame.key.get_pressed()             # Tastenzustand abfragen
@@ -68,6 +76,23 @@ while running:
         if spieler.alive and pygame.sprite.collide_mask(spieler, gegner):
             spieler.alive = False  # Spieler wird getroffen
 
+    # Projektile aktualisieren und zeichnen
+    for bullet in bullets[:]:
+        bullet.update()
+        bullet.zeichnen(window)
+
+        # Entferne Projektile, die das Spielfeld verlassen
+        if bullet.rect.bottom < 0:
+            bullets.remove(bullet)
+
+        # Prüfe Kollision zwischen Projektil und Gegner
+        for gegner in gegner_liste:
+            if pygame.sprite.collide_mask(bullet, gegner):
+                bullets.remove(bullet)  # Entferne das Projektil
+                gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
+                gegner.rect.x = random.randint(0, s.SCREEN_WIDTH - gegner.rect.width)
+                break
+
     # Spieler zeichnen
     spieler.zeichnen(window)
 
@@ -84,6 +109,13 @@ while running:
             spieler.alive = True
             spieler2.alive = True
             spieler3.alive = True
+            for gegner in gegner_liste:
+                gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
+        elif spieler2.alive is False and spieler3.alive is False:  # Nur ein Spieler verbunden
+            menu.anzeigen("Game Over. Press ENTER to Restart")
+            # Spiel zurücksetzen
+            score = 0
+            spieler.alive = True
             for gegner in gegner_liste:
                 gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
 
