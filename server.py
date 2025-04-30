@@ -37,7 +37,7 @@ class Server:
     def run(self):
         player_id = 0
         while True:
-            conn, addr = self.serber.accept()
+            conn, addr = self.server.accept()
             print(f"Verbindung von {addr} akzeptiert")
             with self.lock:
                 self.players[player_id] = None
