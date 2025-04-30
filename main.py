@@ -1,130 +1,106 @@
-import pygame                                 # Pygame für Grafik, Eingabe und Spielsteuerung
-import sys                                    # Für sauberes Beenden (sys.exit)
-import socket                                 # Für Netzwerkverbindung (TCP)
-import pickle                                 # Für Serialisierung/Deserialisierung von Python-Objekten
-import settings as s                          # Importiert die globalen Einstellungen (z. B. Auflösung, Farben)
-from entities.player import Player            # Importiert die Spielerklasse
-import random
-from entities.enemy import Enemy
-from entities.menu import Menu                # Importiert die Menüklasse
-from entities.bullet import Bullet            # Importiert die Bullet-Klasse
+import pygame
+import sys
+import pickle
+import threading
 
-pygame.init()                                 # Initialisiert alle Pygame-Module
-window = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))  # Erzeugt das Spiel-Fenster
-pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den Fenstertitel
-clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
+from settings import WIDTH, HEIHGT, FPS, PLAYER_SPEED, ENEMY_SPEED, BULLET_SPEED, SERVER_IP, SERVER_PORT
+from player import Player
+from enemy import Enemy
+from bullet import Bullet
+from menu import draw_menu
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
-sock.connect(('192.168.178.95', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
+pygame.init()
+win = pygame.display.set_mode((WIDTH, HEIHGT))
+pygame.display.set_caption("Multiplayer Game")
+font = pygame.font.SysFont("Arial", 30)
 
-# Spielerobjekte werden erzeugt – Startpositionen kommen gleich vom Server
-spieler = Player((100, s.SCREEN_HEIGHT - 40), color=s.GREEN) 
-spieler2 = Player((200, s.SCREEN_HEIGHT - 40), color=s.RED) 
-spieler3 = Player((300, s.SCREEN_HEIGHT - 40), color=s.YELLOW)         # Lokaler Spieler (grün)
-gegner = Player((400, s.SCREEN_HEIGHT - 40), color=s.BLUE)           # Gegner (blau)
-
-# Erstelle Gegner
-gegner_liste = [Enemy(random.randint(0, s.SCREEN_WIDTH - 50), random.randint(-200, -50)) for _ in range(5)]
-
-score = 0  # Initialisiere den Score
-
-# Initialisiere das Menü
-menu = Menu(window)
-
-# Zeige das Menü am Anfang des Spiels
-menu.anzeigen()
-
-# Liste für Projektile
+clock = pygame.time.Clock()
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.connect((SERVER_IP, SERVER_PORT))
+player_id = pickle.loads(client.recv(4096))
+color = (0, 0, 255) if player_id == 0 else (255, 0, 0)
+player = Player(375, 500, color)
 bullets = []
+enemies = [Enemy() for _ in range(5)]
+ready = False
+players = {}
+ready_status = {}
 
-running = True                                  # Spielschleife aktiv
-while running:
-    clock.tick(s.FPS)                           # Begrenze Framerate auf z. B. 60 FPS
-    window.fill(s.BLACK)                        # Füllt den Hintergrund schwarz
+def receive_data():
+    global players, ready_status
+    while True:
+        try:
+            data = pickle.loads(client.recv(4096))
+            players = data['players']
+            ready_status = data['ready']
+        except:
+            break
 
-    for event in pygame.event.get():            # Ereignisschleife
-        if event.type == pygame.QUIT:           # Wenn das Fenster geschlossen wird
-            running = False                     # Spielschleife beenden
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE and spieler.alive:  # Schießen mit Leertaste
-                bullet = Bullet(spieler.rect.centerx, spieler.rect.top)
-                bullets.append(bullet)
+threading.Thread(target=recieve_data, daemon=True).start()
 
-    # Bewegungseingaben verarbeiten
-    keys = pygame.key.get_pressed()             # Tastenzustand abfragen
-    richtung_x = 0                              # Standard: keine Bewegung
-    richtung_y = 0
-    if keys[pygame.K_LEFT]:                     # Pfeiltaste links
-        richtung_x = -1
-    elif keys[pygame.K_RIGHT]:                  # Pfeiltaste rechts
-        richtung_x = 1
-    if keys[pygame.K_UP]:                       # Pfeiltaste oben
-        richtung_y = -1
-    elif keys[pygame.K_DOWN]:                   # Pfeiltaste unten
-        richtung_y = 1
+def main():
+    global ready, bullets, enemies
+    run = Truein_game = False
+    while run:
+        clock.tick(FPS)
+        if not in_game:
+            draw_menu(win, font, ready)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:
+                        ready = not ready
+            client.send(pickle.dumps({'player': player, 'ready': ready}))
+            if all(ready_status.values()) and len(ready_status) > 0:
+                in_game = True
+                bullets = []
+                enemies = [Enemy() for _ in range(5)]
+                player.alive = True
+        else:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE and player.alive:
+                        bullets.append(Bullet(player.rect.x, player.rect.y))
+            keys = pygame.key.get_pressed()
+            if player.alive:
+                player.move(keys)
+            for bullet in bullets:
+                bullet.move()
+                if bullet.rect.y < 0:
+                    bullets.remove(bullet)
+            for enemy in enemies[:]:
+                enemy.move()
+                if enemy.rect.colliderect(player.rect):
+                    player.alive = False
+                for bullet in bullets:
+                    if enemy.rect.colliderect(bullet.rect):
+                        bullets.remove(bullet)
+                        enemies.remove(enemy)
+                        break
+            if not player.alive:
+                in_game = False
+                ready = False
+            win.fill((0, 0, 0))
+            player.draw(win)
+            for bullet in bullets:
+                bullet.draw(win)
+            for enemy in enemies:
+                enemy.draw(win)
+            pygame.display.update()
+            client.send(pickle.dumps({'player': player, 'bullets': bullets, 'enemies': enemies}))
 
-    # Spieler bewegen
-    if spieler.alive:
-        spieler.bewegen(richtung_x, richtung_y)
+    pygame.quit()
 
-    # Gegner aktualisieren und zeichnen
-    for gegner in gegner_liste:
-        gegner.update()
-        gegner.zeichnen(window)
+if __name__ == "__main__":
+    main()
 
-        # Pixelgenaue Kollision zwischen Spieler und Gegner prüfen
-        if spieler.alive and pygame.sprite.collide_mask(spieler, gegner):
-            spieler.alive = False  # Spieler wird getroffen
 
-    # Projektile aktualisieren und zeichnen
-    for bullet in bullets[:]:
-        bullet.update()
-        bullet.zeichnen(window)
+            
+            
+                
+                
 
-        # Entferne Projektile, die das Spielfeld verlassen
-        if bullet.rect.bottom < 0:
-            bullets.remove(bullet)
 
-        # Prüfe Kollision zwischen Projektil und Gegner
-        for gegner in gegner_liste:
-            if pygame.sprite.collide_mask(bullet, gegner):
-                bullets.remove(bullet)  # Entferne das Projektil
-                gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
-                gegner.rect.x = random.randint(0, s.SCREEN_WIDTH - gegner.rect.width)
-                break
-
-    # Spieler zeichnen
-    spieler.zeichnen(window)
-
-    # Score erhöhen, wenn der Spieler lebt
-    if spieler.alive:
-        score += 1
-
-    # Prüfen, ob alle Spieler getroffen wurden
-    if not spieler.alive:
-        if all(not g.alive for g in [spieler2, spieler3]):  # Beispiel für mehrere Spieler
-            menu.anzeigen("All players are dead. Press ENTER to Restart")
-            # Spiel zurücksetzen
-            score = 0
-            spieler.alive = True
-            spieler2.alive = True
-            spieler3.alive = True
-            for gegner in gegner_liste:
-                gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
-        elif spieler2.alive is False and spieler3.alive is False:  # Nur ein Spieler verbunden
-            menu.anzeigen("Game Over. Press ENTER to Restart")
-            # Spiel zurücksetzen
-            score = 0
-            spieler.alive = True
-            for gegner in gegner_liste:
-                gegner.rect.y = random.randint(-200, -50)  # Gegner neu positionieren
-
-    # Score anzeigen
-    font = pygame.font.SysFont(None, 36)
-    score_text = font.render(f"Score: {score}", True, s.WHITE)
-    window.blit(score_text, (10, 10))
-
-    pygame.display.update()                     # Aktualisiere Bildschirm
-
-pygame.quit()                                   # Beende Pygame
-sys.exit()                                      # Beende das Programm vollständig
