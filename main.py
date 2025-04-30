@@ -1,5 +1,5 @@
 import pygame
-import sys
+import socket
 import pickle
 import threading
 
@@ -36,7 +36,7 @@ def receive_data():
         except:
             break
 
-threading.Thread(target=recieve_data, daemon=True).start()
+threading.Thread(target=receive_data, daemon=True).start()
 
 def main():
     global ready, bullets, enemies
