@@ -1,50 +1,49 @@
-# server.py
-import socket
-import threading
-import pickle
+import socket                                  # Modul für Netzwerkkommunikation (TCP/IP)
+import threading                               # Ermöglicht parallele Verarbeitung (ein Thread pro Client)
+import pickle                                  # Zum Serialisieren/Deserialisieren von Python-Objekten
+import settings as s                           # Importiert globale Konstanten (z. B. SCREEN_WIDTH, PLAYER_SPEED)
 
-from settings import SERVER_IP, SERVER_PORT, MAX_PLAYERS
+spieler_daten = {                              # Startpositionen für Spieler 0 und 1
+    0: (100, s.SCREEN_HEIGHT - 40),            # Spieler 0 startet links unten
+    1: (600, s.SCREEN_HEIGHT - 40)             # Spieler 1 startet rechts unten
+}
 
-class Server:
-    def __init__(self):
-        self.players = {}
-        self.ready = {}
-        self.lock = threading.Lock()
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.bind((SERVER_IP, SERVER_PORT))
-        self.server.listen()
-        print(f"Server started on {SERVER_IP}:{SERVER_PORT}")
+verbindungen = []                              # Liste aller aktiven Verbindungen
+spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40)]  # Positionen beider Spieler
 
-    def client_thread(self, conn, player_id):
-        conn.send(pickle.dumps(player_id))
-        while True:
-            try:
-                data = pickle.loads(conn.recv(1024))
-                if not data:
-                    break
-                with self.lock:
-                    self.players[player_id] = data['player']
-                    self.ready[player_id] = data['ready']
-                conn.send(pickle.dumps({'players': self.players, 'ready': self.ready}))
-            except:
-                break
-        print(F"Verbindung zu Spieler {player_id} getrennt")
-        with self.lock:
-            del self.players[player_id]
-            del self.ready[player_id]
-        conn.close()
 
-    def run(self):
-        player_id = 0
-        while True:
-            conn, addr = self.server.accept()
-            print(f"Verbindung von {addr} akzeptiert")
-            with self.lock:
-                self.players[player_id] = None
-                self.ready[player_id] = False
-            threading.Thread(target=self.client_thread, args=(conn, player_id)).start()
-            player_id += 1
+def client_thread(conn, spieler_id):           # Funktion für die Client-Verarbeitung in einem Thread
+    global spielzustand
+    conn.sendall(pickle.dumps(spielzustand))   # Sende initialen Spielzustand an den Client
 
-if __name__ == "__main__":
-    server = Server()
-    server.run()
+    while True:                                 # Endlosschleife zur Kommunikation mit diesem Client
+        try:
+            daten = pickle.loads(conn.recv(1024))         # Empfange Eingaben vom Client (deserialisiert mit pickle)
+            richtung_x = daten.get("richtung_x", 0)       # Extrahiere Bewegungsrichtung für x (-1, 0 oder 1)
+            richtung_y = daten.get("richtung_y", 0)       # Extrahiere Bewegungsrichtung für y (-1, 0 oder 1)
+            x, y = spielzustand[spieler_id]               # Hole aktuelle Position dieses Spielers
+            x += richtung_x * s.PLAYER_SPEED              # Aktualisiere x-Position basierend auf Eingabe
+            y += richtung_y * s.PLAYER_SPEED              # Aktualisiere y-Position basierend auf Eingabe
+            x = max(0, min(s.SCREEN_WIDTH - 50, x))       # Begrenze x-Position innerhalb des Fensters
+            y = max(0, min(s.SCREEN_HEIGHT - 30, y))      # Begrenze y-Position innerhalb des Fensters
+            spielzustand[spieler_id] = (x, y)             # Aktualisiere Spielzustand
+            conn.sendall(pickle.dumps(spielzustand))      # Sende den neuen Spielzustand an den Client zurück
+        except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:  # Wenn die Verbindung unterbrochen wurde
+            print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")         # Fehler ausgeben
+            break
+    conn.close()                                # Verbindung zum Client schließen
+
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Erstelle ein TCP/IP-Server-Socket
+server.bind(("0.0.0.0", 65432))                # Binde Server an alle Netzwerkinterfaces, Port 65432
+server.listen(2)                               # Warte auf bis zu 2 gleichzeitige Verbindungen
+print("Server gestartet")                      # Bestätigung auf der Konsole
+
+spieler_id = 0                                 # Start-ID für erste Verbindung
+while spieler_id < 2:                          # Erlaube maximal zwei Spieler
+    conn, addr = server.accept()              # Warte auf eingehende Verbindung
+    print(f"Spieler {spieler_id} verbunden: {addr}")  # Gib verbundene IP-Adresse aus
+    verbindungen.append(conn)                 # Speichere die Verbindung
+    thread = threading.Thread(target=client_thread, args=(conn, spieler_id))  # Erstelle neuen Thread für diesen Client
+    thread.start()                            # Starte den Thread
+    spieler_id += 1                           # Erhöhe Spieler-ID (maximal 2)

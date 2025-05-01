@@ -1,111 +1,109 @@
-import pygame
-import socket
-import pickle
-import threading
+import pygame                                 # Pygame für Grafik, Eingabe und Spielsteuerung
+import sys                                    # Für sauberes Beenden (sys.exit)
+import socket                                 # Für Netzwerkverbindung (TCP)
+import pickle                                 # Für Serialisierung/Deserialisierung von Python-Objekten
+import random                                 # Für zufällige Positionen der Gegner
+import settings as s                          # Importiert die globalen Einstellungen (z. B. Auflösung, Farben)
+from entities.player import Player            # Importiert die Spielerklasse
+from entities.enemy import Enemy              # Importiere die Enemy-Klasse
+from entities.bullet import Bullet            # Importiere die Bullet-Klasse
 
-from settings import WIDTH, HEIHGT, FPS, PLAYER_SPEED, SERVER_IP, SERVER_PORT
-from player import Player
-from enemy import Enemy
-from bullet import Bullet
-from menu import draw_menu
+pygame.init()                                 # Initialisiert alle Pygame-Module
+window = pygame.display.set_mode((s.SCREEN_WIDTH, s.SCREEN_HEIGHT))  # Erzeugt das Spiel-Fenster
+pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den Fenstertitel
+clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
 
-pygame.init()
-win = pygame.display.set_mode((WIDTH, HEIHGT))
-pygame.display.set_caption("Multiplayer Game")
-font = pygame.font.SysFont("Arial", 30)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
+sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
-clock = pygame.time.Clock()
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect((SERVER_IP, SERVER_PORT))
-player_id = pickle.loads(client.recv(4096))
-color = (0, 0, 255) if player_id == 0 else (255, 0, 0)
-player = Player(375, 500, color)
+# Spielerobjekte werden erzeugt – Startpositionen kommen gleich vom Server
+spieler = Player((0, 0), color=s.GREEN)         # Lokaler Spieler (grün)
+gegner = Player((0, 0), color=s.BLUE)           # Gegner (blau)
+
+# Erstelle eine Liste von Gegnern mit zufälligen Startpositionen
+gegner_liste = [Enemy(random.randint(0, s.SCREEN_WIDTH - 40), random.randint(-300, -30)) for _ in range(5)]
+
+# Status der Spieler (True = aktiv, False = getroffen)
+spieler_status = [True, True]
+
+# Liste für aktive Bullets
 bullets = []
-enemies = [Enemy() for _ in range(5)]
-ready = False
-players = {}
-ready_status = {}
 
-def receive_data():
-    global players, ready_status
-    while True:
-        try:
-            data = pickle.loads(client.recv(4096))
-            players = data['players']
-            ready_status = data['ready']
-        except:
-            break
+running = True                                  # Spielschleife aktiv
+while running:
+    clock.tick(s.FPS)                           # Begrenze Framerate auf z. B. 60 FPS
+    window.fill(s.BLACK)                        # Füllt den Hintergrund schwarz
 
-threading.Thread(target=receive_data, daemon=True).start()
+    for event in pygame.event.get():            # Ereignisschleife
+        if event.type == pygame.QUIT:           # Wenn das Fenster geschlossen wird
+            running = False                     # Spielschleife beenden
+        if event.type == pygame.KEYDOWN:        # Wenn eine Taste gedrückt wird
+            if event.key == pygame.K_SPACE and spieler_status[0]:  # Schieße nur, wenn Spieler 1 aktiv ist
+                # Erstelle eine neue Bullet an der Position des Spielers
+                bullets.append(Bullet(spieler.rect.centerx, spieler.rect.top))
 
-def main():
-    global ready, bullets, enemies
-    run = True
-    in_game = False  # Korrekte Initialisierung
-    while run:
-        clock.tick(FPS)
-        try:
-            if not in_game:
-                draw_menu(win, font, ready)
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        run = False
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_r:
-                            ready = not ready
-                client.send(pickle.dumps({'player': player, 'ready': ready}))
-                if all(ready_status.values()) and len(ready_status) > 0:
-                    in_game = True
-                    bullets = []
-                    enemies = [Enemy() for _ in range(5)]
-                    player.alive = True
-            else:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        run = False
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_SPACE and player.alive:
-                            bullets.append(Bullet(player.rect.x, player.rect.y))
-                keys = pygame.key.get_pressed()
-                if player.alive:
-                    player.move(keys)
-                for bullet in bullets[:]:
-                    bullet.move()
-                    if bullet.rect.y < 0:
-                        bullets.remove(bullet)
-                for enemy in enemies[:]:
-                    enemy.move()
-                    if enemy.rect.colliderect(player.rect):
-                        player.alive = False
-                    for bullet in bullets[:]:
-                        if enemy.rect.colliderect(bullet.rect):
-                            bullets.remove(bullet)
-                            enemies.remove(enemy)
-                            break
-                if not player.alive:
-                    in_game = False
-                    ready = False
-                win.fill((0, 0, 0))
-                player.draw(win)
-                for bullet in bullets:
-                    bullet.draw(win)
-                for enemy in enemies:
-                    enemy.draw(win)
-                pygame.display.update()
-                client.send(pickle.dumps({'player': player, 'bullets': bullets, 'enemies': enemies}))
-        except Exception as e:
-            print(f"Ein Fehler ist aufgetreten: {e}")
-            run = False
+    keys = pygame.key.get_pressed()             # Tastenzustand abfragen
+    richtung_x = 0                              # Horizontale Bewegung
+    richtung_y = 0                              # Vertikale Bewegung
 
-    pygame.quit()
+    if keys[pygame.K_LEFT]:                     # Pfeiltaste links
+        richtung_x = -1
+    elif keys[pygame.K_RIGHT]:                  # Pfeiltaste rechts
+        richtung_x = 1
+    if keys[pygame.K_UP]:                       # Pfeiltaste oben
+        richtung_y = -1
+    elif keys[pygame.K_DOWN]:                   # Pfeiltaste unten
+        richtung_y = 1
 
-if __name__ == "__main__":
-    main()
+    nachricht = {"richtung_x": richtung_x, "richtung_y": richtung_y}  # Verpacke Eingabe in ein Dictionary
+    sock.sendall(pickle.dumps(nachricht))       # Sende die Daten serialisiert an den Server
 
+    daten = pickle.loads(sock.recv(2048))       # Empfange aktualisierte Positionen vom Server
+    spieler.rect.topleft = daten[0]             # Setze eigene Position
+    gegner.rect.topleft = daten[1]              # Setze Gegnerposition
 
+    # Aktualisiere und zeichne alle Gegner
+    for enemy in gegner_liste:
+        enemy.update()
+        enemy.zeichnen(window)
 
+        # Überprüfe Kollision mit Spieler 1
+        if spieler_status[0] and spieler.rect.colliderect(enemy.rect):
+            spieler_status[0] = False           # Spieler 1 wurde getroffen
 
+        # Überprüfe Kollision mit Spieler 2
+        if spieler_status[1] and gegner.rect.colliderect(enemy.rect):
+            spieler_status[1] = False           # Spieler 2 wurde getroffen
 
+    # Aktualisiere und zeichne alle Bullets
+    for bullet in bullets[:]:
+        bullet.update()
+        bullet.zeichnen(window)
 
+        # Überprüfe Kollision mit Gegnern
+        for enemy in gegner_liste:
+            if bullet.rect.colliderect(enemy.rect):
+                bullets.remove(bullet)          # Entferne die Bullet
+                enemy.rect.y = -enemy.rect.height  # Respawne den Gegner oben
+                enemy.rect.x = random.randint(0, s.SCREEN_WIDTH - enemy.rect.width)
+                break                           # Verlasse die Schleife, da die Bullet bereits entfernt wurde
 
+        # Entferne Bullets, die den oberen Bildschirmrand verlassen
+        if bullet.rect.bottom < 0:
+            bullets.remove(bullet)
 
+    # Zeichne Spieler nur, wenn sie aktiv sind
+    if spieler_status[0]:
+        spieler.zeichnen(window)
+    if spieler_status[1]:
+        gegner.zeichnen(window)
+
+    # Überprüfe, ob beide Spieler getroffen wurden
+    if not any(spieler_status):                 # Wenn beide Spieler False sind
+        print("Beide Spieler wurden getroffen. Spiel beendet!")
+        running = False                         # Beende die Spielschleife
+
+    pygame.display.update()                     # Aktualisiere Bildschirm
+
+pygame.quit()                                   # Beende Pygame
+sys.exit()                                      # Beende das Programm vollständig
