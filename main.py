@@ -17,8 +17,8 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt 
 sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
 # Spielerobjekte werden erzeugt – Startpositionen kommen gleich vom Server
-spieler = Player((0, 0), color=s.GREEN)         # Lokaler Spieler (grün)
-gegner = Player((0, 0), color=s.BLUE)           # Gegner (blau)
+spieler = Player((0, 0))         # Lokaler Spieler (grün)
+gegner = Player((0, 0))           # Gegner (blau)
 
 # Erstelle eine Liste von Gegnern mit zufälligen Startpositionen
 gegner_liste = [Enemy(random.randint(0, s.SCREEN_WIDTH - 40), random.randint(-300, -30)) for _ in range(5)]
@@ -67,26 +67,25 @@ while running:
         enemy.update()
         enemy.zeichnen(window)
 
-        # Überprüfe Kollision mit Spieler 1
-        if spieler_status[0] and spieler.rect.colliderect(enemy.rect):
-            spieler_status[0] = False           # Spieler 1 wurde getroffen
+    # Überprüfe Kollision mit Gegnern
+    for enemy in gegner_liste:
+        if spieler_status[0] and pygame.sprite.collide_mask(spieler, enemy):  # Pixelgenaue Kollision
+            spieler_status[0] = False  # Spieler 1 wurde getroffen
 
-        # Überprüfe Kollision mit Spieler 2
-        if spieler_status[1] and gegner.rect.colliderect(enemy.rect):
-            spieler_status[1] = False           # Spieler 2 wurde getroffen
+        if spieler_status[1] and pygame.sprite.collide_mask(gegner, enemy):  # Pixelgenaue Kollision
+            spieler_status[1] = False  # Spieler 2 wurde getroffen
 
-    # Aktualisiere und zeichne alle Bullets
+    # Überprüfe Kollision der Bullets mit Gegnern
     for bullet in bullets[:]:
         bullet.update()
         bullet.zeichnen(window)
 
-        # Überprüfe Kollision mit Gegnern
         for enemy in gegner_liste:
-            if bullet.rect.colliderect(enemy.rect):
-                bullets.remove(bullet)          # Entferne die Bullet
+            if pygame.sprite.collide_mask(bullet, enemy):  # Pixelgenaue Kollision
+                bullets.remove(bullet)  # Entferne die Bullet
                 enemy.rect.y = -enemy.rect.height  # Respawne den Gegner oben
                 enemy.rect.x = random.randint(0, s.SCREEN_WIDTH - enemy.rect.width)
-                break                           # Verlasse die Schleife, da die Bullet bereits entfernt wurde
+                break  # Verlasse die Schleife, da die Bullet bereits entfernt wurde
 
         # Entferne Bullets, die den oberen Bildschirmrand verlassen
         if bullet.rect.bottom < 0:

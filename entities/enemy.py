@@ -1,14 +1,15 @@
-import random  # Für zufällige Startpositionen
+import random
 import pygame
 import settings as s
 
 
 class Enemy:
     def __init__(self, x, y):
-        self.image = pygame.Surface((40, 30))
-        self.image.fill(s.RED)
+        self.image = pygame.image.load("Raumschiff.png").convert_alpha()  # Lade das Bild mit Transparenz
+        self.image = pygame.transform.scale(self.image, (40, 40))  # Skaliere das Bild auf 40x40 Pixel
         self.rect = self.image.get_rect(topleft=(x, y))
         self.speed = s.ENEMY_SPEED
+        self.mask = pygame.mask.from_surface(self.image)  # Erstelle eine Maske für pixelgenaue Kollision
 
     def update(self):
         self.rect.y += self.speed  # Bewege den Gegner nach unten

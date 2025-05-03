@@ -3,7 +3,7 @@ SCREEN_HEIGHT = 600
 FPS = 60
 
 PLAYER_SPEED = 5
-BULLET_SPEED = -7
+BULLET_SPEED = 7
 ENEMY_SPEED = 2  # Geschwindigkeit der Gegner
 
 MAX_BULLETS = 3
