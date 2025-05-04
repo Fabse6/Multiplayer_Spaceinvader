@@ -15,6 +15,26 @@ clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung d
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
 sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
+# Warte-Bildschirm anzeigen
+font = pygame.font.Font(None, 36)  # Schriftart und -größe
+waiting_text = font.render("Warte auf zweiten Spieler...", True, s.WHITE)  # Text rendern
+waiting_rect = waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2))  # Zentriere den Text
+
+waiting = True
+while waiting:
+    window.fill(s.BLACK)  # Hintergrund schwarz
+    window.blit(waiting_text, waiting_rect)  # Text auf den Bildschirm zeichnen
+    pygame.display.update()  # Bildschirm aktualisieren
+
+    try:
+        daten = pickle.loads(sock.recv(2048))  # Warte auf Startsignal vom Server
+        if daten.get("start"):  # Wenn das Startsignal empfangen wird
+            waiting = False  # Warte-Bildschirm verlassen
+    except (ConnectionResetError, EOFError, pickle.UnpicklingError):
+        print("Verbindung zum Server verloren.")
+        pygame.quit()
+        sys.exit()
+
 # Spielerobjekte werden erzeugt – Startpositionen kommen gleich vom Server
 spieler = [Player((0, 0), color=s.GREEN), Player((0, 0), color=s.BLUE)]  # Zwei Spielerobjekte
 gegner = [Enemy(0, 0) for _ in range(5)]        # Platzhalter für Gegner

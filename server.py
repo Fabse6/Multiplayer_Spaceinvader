@@ -99,6 +99,15 @@ while spieler_id < 2:                          # Erlaube maximal zwei Spieler
     conn, addr = server.accept()              # Warte auf eingehende Verbindung
     print(f"Spieler {spieler_id} verbunden: {addr}")  # Gib verbundene IP-Adresse aus
     verbindungen.append(conn)                 # Speichere die Verbindung
-    thread = threading.Thread(target=client_thread, args=(conn, spieler_id))  # Erstelle neuen Thread für diesen Client
-    thread.start()                            # Starte den Thread
     spieler_id += 1                           # Erhöhe Spieler-ID (maximal 2)
+
+print("Alle Spieler verbunden. Spiel startet!")  # Bestätigung, dass beide Spieler verbunden sind
+
+# Sende Startsignal an beide Spieler
+for verbindung in verbindungen:
+    verbindung.sendall(pickle.dumps({"start": True}))
+
+# Starte Threads für beide Spieler
+for i, conn in enumerate(verbindungen):
+    thread = threading.Thread(target=client_thread, args=(conn, i))  # Erstelle neuen Thread für diesen Client
+    thread.start()                            # Starte den Thread
