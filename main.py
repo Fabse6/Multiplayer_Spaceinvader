@@ -17,9 +17,25 @@ sock.connect(('127.0.0.1', 65432))                                   # Verbindet
 
 # Warte-Bildschirm anzeigen
 font = pygame.font.Font(None, 36)  # Schriftart und -größe
-waiting_text = font.render("Warte auf zweiten Spieler...", True, s.WHITE)  # Text rendern
+waiting_text = font.render("Drücke 'B', um bereit zu sein...", True, s.WHITE)  # Text rendern
 waiting_rect = waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2))  # Zentriere den Text
 
+bereit = False
+while not bereit:
+    window.fill(s.BLACK)  # Hintergrund schwarz
+    window.blit(waiting_text, waiting_rect)  # Text auf den Bildschirm zeichnen
+    pygame.display.update()  # Bildschirm aktualisieren
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:  # Fenster schließen
+            pygame.quit()
+            sys.exit()
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_b:  # Spieler drückt 'B'
+            sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
+            bereit = True
+
+# Warte auf Startsignal vom Server
+waiting_text = font.render("Warte auf anderen Spieler...", True, s.WHITE)  # Text rendern
 waiting = True
 while waiting:
     window.fill(s.BLACK)  # Hintergrund schwarz

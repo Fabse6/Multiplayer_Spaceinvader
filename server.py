@@ -13,6 +13,7 @@ verbindungen = []                              # Liste aller aktiven Verbindunge
 spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40)]  # Positionen beider Spieler
 gegner = [{"x": random.randint(0, s.SCREEN_WIDTH - 40), "y": -30} for _ in range(5)]  # 5 Gegner
 bullets = []                                   # Liste für Bullets
+spieler_bereit = [False, False]                # Liste, um den Bereitschaftsstatus der Spieler zu speichern
 
 
 def rechteck_kollision(obj1, obj2):
@@ -89,6 +90,22 @@ def client_thread(conn, spieler_id):  # Funktion für die Client-Verarbeitung in
     conn.close()  # Verbindung zum Client schließen
 
 
+def warte_auf_bereitschaft():
+    """Warte, bis beide Spieler bereit sind."""
+    global spieler_bereit
+    while not all(spieler_bereit):  # Schleife, bis beide Spieler bereit sind
+        for i, conn in enumerate(verbindungen):
+            try:
+                daten = pickle.loads(conn.recv(1024))  # Empfange Daten vom Spieler
+                if daten.get("bereit"):  # Spieler hat "Bereit" gesendet
+                    spieler_bereit[i] = True
+                    print(f"Spieler {i} ist bereit.")
+            except (ConnectionResetError, EOFError, pickle.UnpicklingError):
+                print(f"Verbindung zu Spieler {i} verloren.")
+                return False
+    return True
+
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Erstelle ein TCP/IP-Server-Socket
 server.bind(("0.0.0.0", 65432))                # Binde Server an alle Netzwerkinterfaces, Port 65432
 server.listen(2)                               # Warte auf bis zu 2 gleichzeitige Verbindungen
@@ -101,7 +118,12 @@ while spieler_id < 2:                          # Erlaube maximal zwei Spieler
     verbindungen.append(conn)                 # Speichere die Verbindung
     spieler_id += 1                           # Erhöhe Spieler-ID (maximal 2)
 
-print("Alle Spieler verbunden. Spiel startet!")  # Bestätigung, dass beide Spieler verbunden sind
+print("Warte, bis beide Spieler bereit sind...")  # Hinweis auf der Konsole
+if not warte_auf_bereitschaft():  # Warte auf Bereitschaft
+    print("Spiel konnte nicht gestartet werden.")
+    exit()
+
+print("Alle Spieler bereit. Spiel startet!")  # Bestätigung, dass beide Spieler bereit sind
 
 # Sende Startsignal an beide Spieler
 for verbindung in verbindungen:
