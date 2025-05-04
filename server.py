@@ -8,31 +8,27 @@ spieler_daten = {                              # Startpositionen für Spieler 0 
     1: (600, s.SCREEN_HEIGHT - 40)             # Spieler 1 startet rechts unten
 }
 
-verbindungen = {}                              # Dictionary für aktive Verbindungen {spieler_id: conn}
+verbindungen = []                              # Liste aller aktiven Verbindungen
 spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40)]  # Positionen beider Spieler
 
 
 def client_thread(conn, spieler_id):           # Funktion für die Client-Verarbeitung in einem Thread
-    global spielzustand, verbindungen
+    global spielzustand
     conn.sendall(pickle.dumps(spielzustand))   # Sende initialen Spielzustand an den Client
 
-    while True:
+    while True:                                 # Endlosschleife zur Kommunikation mit diesem Client
         try:
-            daten = pickle.loads(conn.recv(1024))         # Empfange Eingaben vom Client
-            richtung_x = daten.get("richtung_x", 0)       # Extrahiere Bewegungsrichtung für x
-            richtung_y = daten.get("richtung_y", 0)       # Extrahiere Bewegungsrichtung für y
+            daten = pickle.loads(conn.recv(1024))         # Empfange Eingaben vom Client (deserialisiert mit pickle)
+            richtung = daten.get("richtung", 0)           # Extrahiere Bewegungsrichtung (-1, 0 oder 1)
             x, y = spielzustand[spieler_id]               # Hole aktuelle Position dieses Spielers
-            x += richtung_x * s.PLAYER_SPEED              # Aktualisiere x-Position
-            y += richtung_y * s.PLAYER_SPEED              # Aktualisiere y-Position
-            x = max(0, min(s.SCREEN_WIDTH - 50, x))       # Begrenze x-Position
-            y = max(0, min(s.SCREEN_HEIGHT - 30, y))      # Begrenze y-Position
+            x += richtung * s.PLAYER_SPEED                # Aktualisiere x-Position basierend auf Eingabe
+            x = max(0, min(s.SCREEN_WIDTH - 50, x))       # Begrenze Position innerhalb des Fensters
             spielzustand[spieler_id] = (x, y)             # Aktualisiere Spielzustand
             conn.sendall(pickle.dumps(spielzustand))      # Sende den neuen Spielzustand an den Client zurück
-        except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:
-            print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")
-            del verbindungen[spieler_id]                 # Entferne die Verbindung aus der Liste
+        except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:  # Wenn die Verbindung unterbrochen wurde
+            print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")         # Fehler ausgeben
             break
-    conn.close()                                         # Verbindung schließen
+    conn.close()                                # Verbindung zum Client schließen
 
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Erstelle ein TCP/IP-Server-Socket
@@ -40,22 +36,11 @@ server.bind(("0.0.0.0", 65432))                # Binde Server an alle Netzwerkin
 server.listen(2)                               # Warte auf bis zu 2 gleichzeitige Verbindungen
 print("Server gestartet")                      # Bestätigung auf der Konsole
 
-while True:                                    # Endlosschleife für neue Verbindungen
-    conn, addr = server.accept()               # Warte auf eingehende Verbindung
-    print(f"Neue Verbindung von: {addr}")
-
-    # Finde eine freie Spieler-ID
-    freie_id = None
-    for i in range(2):
-        if i not in verbindungen:
-            freie_id = i
-            break
-
-    if freie_id is not None:                   # Wenn eine freie Spieler-ID gefunden wurde
-        verbindungen[freie_id] = conn          # Speichere die Verbindung
-        print(f"Spieler {freie_id} verbunden: {addr}")
-        thread = threading.Thread(target=client_thread, args=(conn, freie_id))  # Erstelle neuen Thread
-        thread.start()                         # Starte den Thread
-    else:
-        print("Maximale Spieleranzahl erreicht. Verbindung abgelehnt.")
-        conn.close()                           # Schließe die Verbindung, wenn kein Platz frei ist
+spieler_id = 0                                 # Start-ID für erste Verbindung
+while spieler_id < 2:                          # Erlaube maximal zwei Spieler
+    conn, addr = server.accept()              # Warte auf eingehende Verbindung
+    print(f"Spieler {spieler_id} verbunden: {addr}")  # Gib verbundene IP-Adresse aus
+    verbindungen.append(conn)                 # Speichere die Verbindung
+    thread = threading.Thread(target=client_thread, args=(conn, spieler_id))  # Erstelle neuen Thread für diesen Client
+    thread.start()                            # Starte den Thread
+    spieler_id += 1                           # Erhöhe Spieler-ID (maximal 2)
