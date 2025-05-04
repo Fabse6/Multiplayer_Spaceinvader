@@ -13,33 +13,36 @@ pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den
 clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
-sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
+sock.connect(('192.168.2.210', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
 # Warte-Bildschirm anzeigen
 font = pygame.font.Font(None, 36)  # Schriftart und -größe
-waiting_text = font.render("Drücke 'B', um bereit zu sein...", True, s.WHITE)  # Text rendern
-waiting_rect = waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2))  # Zentriere den Text
+waiting_text = font.render("Bereit?", True, s.WHITE)  # Text für den Button
+button_color = s.BLUE
+button_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 25, 200, 50)  # Button-Position und -Größe
 
 bereit = False
 while not bereit:
     window.fill(s.BLACK)  # Hintergrund schwarz
-    window.blit(waiting_text, waiting_rect)  # Text auf den Bildschirm zeichnen
+    pygame.draw.rect(window, button_color, button_rect)  # Zeichne den Button
+    window.blit(waiting_text, waiting_text.get_rect(center=button_rect.center))  # Zeichne den Text auf den Button
     pygame.display.update()  # Bildschirm aktualisieren
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:  # Fenster schließen
             pygame.quit()
             sys.exit()
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_b:  # Spieler drückt 'B'
-            sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
-            bereit = True
+        if event.type == pygame.MOUSEBUTTONDOWN:  # Mausklick
+            if button_rect.collidepoint(event.pos):  # Prüfe, ob der Button geklickt wurde
+                sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
+                bereit = True
 
 # Warte auf Startsignal vom Server
 waiting_text = font.render("Warte auf anderen Spieler...", True, s.WHITE)  # Text rendern
 waiting = True
 while waiting:
     window.fill(s.BLACK)  # Hintergrund schwarz
-    window.blit(waiting_text, waiting_rect)  # Text auf den Bildschirm zeichnen
+    window.blit(waiting_text, waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2)))  # Text zentrieren
     pygame.display.update()  # Bildschirm aktualisieren
 
     try:
