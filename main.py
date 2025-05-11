@@ -13,42 +13,52 @@ pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den
 clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
-sock.connect(('192.168.2.210', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
+sock.connect(('192.168.2.176', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
-# Warte-Bildschirm anzeigen
-font = pygame.font.Font(None, 36)  # Schriftart und -größe
-waiting_text = font.render("Bereit?", True, s.WHITE)  # Text für den Button
-button_color = s.BLUE
-button_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 25, 200, 50)  # Button-Position und -Größe
+def zeige_bereit_button(sock):
+    """Zeigt den Bereit-Button an und ändert die Farbe, wenn der Spieler bereit ist."""
+    font = pygame.font.Font(None, 36)
+    waiting_text = font.render("Bereit?", True, s.WHITE)
+    button_color = s.BLUE
+    button_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 25, 200, 50)
+    bereit = False
 
-bereit = False
-while not bereit:
-    window.fill(s.BLACK)  # Hintergrund schwarz
-    pygame.draw.rect(window, button_color, button_rect)  # Zeichne den Button
-    window.blit(waiting_text, waiting_text.get_rect(center=button_rect.center))  # Zeichne den Text auf den Button
-    pygame.display.update()  # Bildschirm aktualisieren
+    while not bereit:
+        window.fill(s.BLACK)
+        pygame.draw.rect(window, button_color, button_rect)
+        window.blit(waiting_text, waiting_text.get_rect(center=button_rect.center))
+        pygame.display.update()
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:  # Fenster schließen
-            pygame.quit()
-            sys.exit()
-        if event.type == pygame.MOUSEBUTTONDOWN:  # Mausklick
-            if button_rect.collidepoint(event.pos):  # Prüfe, ob der Button geklickt wurde
-                sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
-                bereit = True
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if button_rect.collidepoint(event.pos):
+                    sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
+                    bereit = True
+                    button_color = s.GRAY  # Ändere die Farbe des Buttons zu Grau
+                    waiting_text = font.render("Warte...", True, s.WHITE)  # Aktualisiere den Text
+                    pygame.draw.rect(window, button_color, button_rect)
+                    window.blit(waiting_text, waiting_text.get_rect(center=button_rect.center))
+                    pygame.display.update()
+
+# Ersetze die ursprüngliche Warte-Bildschirm-Logik durch die neue Funktion
+zeige_bereit_button(sock)
 
 # Warte auf Startsignal vom Server
-waiting_text = font.render("Warte auf anderen Spieler...", True, s.WHITE)  # Text rendern
+font = pygame.font.Font(None, 36)
+waiting_text = font.render("Warte auf anderen Spieler...", True, s.WHITE)
 waiting = True
 while waiting:
-    window.fill(s.BLACK)  # Hintergrund schwarz
-    window.blit(waiting_text, waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2)))  # Text zentrieren
-    pygame.display.update()  # Bildschirm aktualisieren
+    window.fill(s.BLACK)
+    window.blit(waiting_text, waiting_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2)))
+    pygame.display.update()
 
     try:
-        daten = pickle.loads(sock.recv(2048))  # Warte auf Startsignal vom Server
-        if daten.get("start"):  # Wenn das Startsignal empfangen wird
-            waiting = False  # Warte-Bildschirm verlassen
+        daten = pickle.loads(sock.recv(2048))
+        if daten.get("start"):
+            waiting = False
     except (ConnectionResetError, EOFError, pickle.UnpicklingError):
         print("Verbindung zum Server verloren.")
         pygame.quit()
@@ -58,6 +68,34 @@ while waiting:
 spieler = [Player((0, 0), color=s.GREEN), Player((0, 0), color=s.BLUE)]  # Zwei Spielerobjekte
 gegner = [Enemy(0, 0) for _ in range(5)]        # Platzhalter für Gegner
 bullets = []                                    # Liste für Bullets
+
+def zeige_game_over_menu(sock):
+    """Zeigt das Game-Over-Menü an und wartet auf die Bereitschaft der Spieler."""
+    font = pygame.font.Font(None, 36)
+    game_over_text = font.render("Spiel beendet! Bereit für Neustart?", True, s.WHITE)
+    button_color = s.BLUE
+    button_rect = pygame.Rect(s.SCREEN_WIDTH // 2 - 100, s.SCREEN_HEIGHT // 2 - 25, 200, 50)
+    bereit = False
+
+    while not bereit:
+        window.fill(s.BLACK)
+        pygame.draw.rect(window, button_color, button_rect)
+        window.blit(game_over_text, game_over_text.get_rect(center=(s.SCREEN_WIDTH // 2, s.SCREEN_HEIGHT // 2 - 50)))
+        waiting_text = font.render("Bereit?", True, s.WHITE)
+        if bereit:
+            waiting_text = font.render("Warte auf Spieler...", True, s.WHITE)
+        window.blit(waiting_text, waiting_text.get_rect(center=button_rect.center))
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if button_rect.collidepoint(event.pos) and not bereit:
+                    sock.sendall(pickle.dumps({"bereit": True}))  # Sende Bereitschaft an den Server
+                    bereit = True
+                    button_color = s.GRAY  # Ändere die Farbe des Buttons zu Grau
 
 running = True  # Spielschleife aktiv
 while running:
@@ -87,29 +125,31 @@ while running:
     daten = pickle.loads(sock.recv(2048))  # Empfange aktualisierte Positionen vom Server
     if daten.get("game_over"):  # Prüfe, ob das Spiel beendet werden soll
         print("Spiel beendet! Ein Spieler wurde getroffen.")
-        running = False  # Beende die Spielschleife
-        break
+        zeige_game_over_menu(sock)  # Zeige das Game-Over-Menü
+        continue  # Warte auf Neustart
 
-    spieler_daten = daten["spieler"]  # Daten der Spieler
-    gegner_daten = daten["gegner"]  # Daten der Gegner
-    bullets_daten = daten["bullets"]  # Daten der Bullets
+    # Prüfe, ob die erwarteten Schlüssel vorhanden sind
+    if "spieler" in daten and "gegner" in daten and "bullets" in daten:
+        spieler_daten = daten["spieler"]  # Daten der Spieler
+        gegner_daten = daten["gegner"]  # Daten der Gegner
+        bullets_daten = daten["bullets"]  # Daten der Bullets
 
-    # Aktualisiere Spielerpositionen
-    for i, spieler_obj in enumerate(spieler):
-        spieler_obj.rect.topleft = spieler_daten[i]
-        spieler_obj.zeichnen(window)
+        # Aktualisiere Spielerpositionen
+        for i, spieler_obj in enumerate(spieler):
+            spieler_obj.rect.topleft = spieler_daten[i]
+            spieler_obj.zeichnen(window)
 
-    # Aktualisiere und zeichne Gegner
-    for i, gegner_obj in enumerate(gegner):
-        gegner_obj.rect.topleft = (gegner_daten[i]["x"], gegner_daten[i]["y"])
-        gegner_obj.zeichnen(window)
+        # Aktualisiere und zeichne Gegner
+        for i, gegner_obj in enumerate(gegner):
+            gegner_obj.rect.topleft = (gegner_daten[i]["x"], gegner_daten[i]["y"])
+            gegner_obj.zeichnen(window)
 
-    # Aktualisiere und zeichne Bullets
-    bullets.clear()
-    for bullet_data in bullets_daten:
-        bullet = Bullet(bullet_data["x"], bullet_data["y"])
-        bullets.append(bullet)
-        bullet.zeichnen(window)
+        # Aktualisiere und zeichne Bullets
+        bullets.clear()
+        for bullet_data in bullets_daten:
+            bullet = Bullet(bullet_data["x"], bullet_data["y"])
+            bullets.append(bullet)
+            bullet.zeichnen(window)
 
     pygame.display.update()  # Aktualisiere Bildschirm
 

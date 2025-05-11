@@ -25,15 +25,30 @@ def rechteck_kollision(obj1, obj2):
         obj1["y"] + 30 > obj2["y"]      # Untere Seite von obj1 > obere Seite von obj2
     )
 
-def client_thread(conn, spieler_id):  # Funktion für die Client-Verarbeitung in einem Thread
-    global spielzustand, gegner, bullets
-    conn.sendall(pickle.dumps({"spieler": spielzustand, "gegner": gegner, "bullets": bullets, "game_over": False}))  # Sende initialen Spielzustand an den Client
 
-    while True:  # Endlosschleife zur Kommunikation mit diesem Client
+def spiel_zuruecksetzen():
+    """Setzt den Spielzustand zurück."""
+    global spielzustand, gegner, bullets, spieler_bereit
+    spielzustand = [(100, s.SCREEN_HEIGHT - 40), (600, s.SCREEN_HEIGHT - 40)]  # Startpositionen der Spieler
+    gegner = [{"x": random.randint(0, s.SCREEN_WIDTH - 40), "y": -30} for _ in range(5)]  # Neue Gegner
+    bullets.clear()  # Alle Bullets entfernen
+    spieler_bereit = [False, False]  # Spieler wieder auf "nicht bereit" setzen
+
+
+def client_thread(conn, spieler_id):
+    global spielzustand, gegner, bullets
+    try:
+        conn.sendall(pickle.dumps({"spieler": spielzustand, "gegner": gegner, "bullets": bullets, "game_over": False}))
+    except OSError:
+        print(f"Fehler beim Senden an Spieler {spieler_id}. Verbindung wird geschlossen.")
+        conn.close()
+        return
+
+    while True:
         try:
-            daten = pickle.loads(conn.recv(1024))  # Empfange Eingaben vom Client (deserialisiert mit pickle)
-            richtung = daten.get("richtung", (0, 0))  # Extrahiere Bewegungsrichtung (-1, 0 oder 1 für x und y)
-            schuss = daten.get("schuss", False)  # Extrahiere Schuss-Information
+            daten = pickle.loads(conn.recv(1024))
+            richtung = daten.get("richtung", (0, 0))
+            schuss = daten.get("schuss", False)
 
             # Spielerbewegung
             x, y = spielzustand[spieler_id]  # Hole aktuelle Position dieses Spielers
@@ -83,11 +98,16 @@ def client_thread(conn, spieler_id):  # Funktion für die Client-Verarbeitung in
                         break
 
             # Aktualisierten Zustand senden
-            conn.sendall(pickle.dumps({"spieler": spielzustand, "gegner": gegner, "bullets": bullets, "game_over": False}))
-        except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:  # Wenn die Verbindung unterbrochen wurde
-            print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")  # Fehler ausgeben
+            try:
+                conn.sendall(pickle.dumps({"spieler": spielzustand, "gegner": gegner, "bullets": bullets, "game_over": False}))
+            except OSError:
+                print(f"Fehler beim Senden an Spieler {spieler_id}. Verbindung wird geschlossen.")
+                conn.close()
+                return
+        except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:
+            print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")
             break
-    conn.close()  # Verbindung zum Client schließen
+    conn.close()
 
 
 def warte_auf_bereitschaft():
@@ -118,18 +138,26 @@ while spieler_id < 2:                          # Erlaube maximal zwei Spieler
     verbindungen.append(conn)                 # Speichere die Verbindung
     spieler_id += 1                           # Erhöhe Spieler-ID (maximal 2)
 
-print("Warte, bis beide Spieler bereit sind...")  # Hinweis auf der Konsole
-if not warte_auf_bereitschaft():  # Warte auf Bereitschaft
-    print("Spiel konnte nicht gestartet werden.")
-    exit()
+while True:
+    print("Warte, bis beide Spieler bereit sind...")
+    if not warte_auf_bereitschaft():
+        print("Spiel konnte nicht gestartet werden.")
+        break
 
-print("Alle Spieler bereit. Spiel startet!")  # Bestätigung, dass beide Spieler bereit sind
+    print("Alle Spieler bereit. Spiel startet!")
+    spiel_zuruecksetzen()  # Spielzustand zurücksetzen
 
-# Sende Startsignal an beide Spieler
-for verbindung in verbindungen:
-    verbindung.sendall(pickle.dumps({"start": True}))
+    # Sende Startsignal an beide Spieler
+    for verbindung in verbindungen:
+        verbindung.sendall(pickle.dumps({"start": True}))
 
-# Starte Threads für beide Spieler
-for i, conn in enumerate(verbindungen):
-    thread = threading.Thread(target=client_thread, args=(conn, i))  # Erstelle neuen Thread für diesen Client
-    thread.start()                            # Starte den Thread
+    # Starte Threads für beide Spieler
+    threads = []
+    for i, conn in enumerate(verbindungen):
+        thread = threading.Thread(target=client_thread, args=(conn, i))
+        thread.start()
+        threads.append(thread)
+
+    # Warte, bis alle Threads beendet sind
+    for thread in threads:
+        thread.join()
