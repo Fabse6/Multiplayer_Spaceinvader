@@ -46,44 +46,46 @@ def client_thread(conn, spieler_id):
 
     while True:
         try:
-            daten = pickle.loads(conn.recv(1024))
+            daten = conn.recv(1024)
+            if not daten:
+                raise ConnectionResetError("Verbindung wurde vom Client geschlossen.")
+            daten = pickle.loads(daten)
             richtung = daten.get("richtung", (0, 0))
             schuss = daten.get("schuss", False)
 
             # Spielerbewegung
-            x, y = spielzustand[spieler_id]  # Hole aktuelle Position dieses Spielers
-            x += richtung[0] * s.PLAYER_SPEED  # Aktualisiere x-Position basierend auf Eingabe
-            y += richtung[1] * s.PLAYER_SPEED  # Aktualisiere y-Position basierend auf Eingabe
-            x = max(0, min(s.SCREEN_WIDTH - 50, x))  # Begrenze x-Position innerhalb des Fensters
-            y = max(0, min(s.SCREEN_HEIGHT - 30, y))  # Begrenze y-Position innerhalb des Fensters
-            spielzustand[spieler_id] = (x, y)  # Aktualisiere Spielzustand
+            x, y = spielzustand[spieler_id]
+            x += richtung[0] * s.PLAYER_SPEED
+            y += richtung[1] * s.PLAYER_SPEED
+            x = max(0, min(s.SCREEN_WIDTH - 50, x))
+            y = max(0, min(s.SCREEN_HEIGHT - 30, y))
+            spielzustand[spieler_id] = (x, y)
 
             # Bullet hinzufügen
             if schuss:
-                bullets.append({"x": x + 25, "y": y})  # Füge neue Bullet hinzu
+                bullets.append({"x": x + 25, "y": y})
 
             # Bullets aktualisieren
             for bullet in bullets[:]:
-                bullet["y"] += s.BULLET_SPEED  # Aktualisiere y-Position der Bullet
-                if bullet["y"] < 0:  # Entferne Bullet, wenn sie aus dem Fenster ist
+                bullet["y"] += s.BULLET_SPEED
+                if bullet["y"] < 0:
                     bullets.remove(bullet)
 
             # Gegner aktualisieren
             for gegner_obj in gegner:
-                gegner_obj["y"] += s.ENEMY_SPEED  # Aktualisiere y-Position des Gegners
-                if gegner_obj["y"] > s.SCREEN_HEIGHT:  # Setze Gegner zurück, wenn er aus dem Fenster ist
+                gegner_obj["y"] += s.ENEMY_SPEED
+                if gegner_obj["y"] > s.SCREEN_HEIGHT:
                     gegner_obj["x"] = random.randint(0, s.SCREEN_WIDTH - 40)
                     gegner_obj["y"] = -30
 
             # Kollisionen prüfen (Spieler vs. Gegner)
             for gegner_obj in gegner:
                 for i, (spieler_x, spieler_y) in enumerate(spielzustand):
-                    spieler_rect = {"x": spieler_x, "y": spieler_y}  # Rechteck des Spielers
-                    if rechteck_kollision(spieler_rect, gegner_obj):  # Prüfe auf Kollision
-                        # Kollision erkannt, Spiel beenden
-                        for verbindung in verbindungen:  # Sende an alle Clients
+                    spieler_rect = {"x": spieler_x, "y": spieler_y}
+                    if rechteck_kollision(spieler_rect, gegner_obj):
+                        for verbindung in verbindungen:
                             verbindung.sendall(pickle.dumps({"spieler": spielzustand, "gegner": gegner, "bullets": bullets, "game_over": True}))
-                        return  # Beende den Thread
+                        return
 
             # Kollisionen prüfen (Bullets vs. Gegner)
             for bullet in bullets[:]:
@@ -92,8 +94,8 @@ def client_thread(conn, spieler_id):
                         gegner_obj["x"] < bullet["x"] < gegner_obj["x"] + 40 and
                         gegner_obj["y"] < bullet["y"] < gegner_obj["y"] + 30
                     ):
-                        bullets.remove(bullet)  # Entferne Bullet bei Kollision
-                        gegner_obj["x"] = random.randint(0, s.SCREEN_WIDTH - 40)  # Setze Gegner zurück
+                        bullets.remove(bullet)
+                        gegner_obj["x"] = random.randint(0, s.SCREEN_WIDTH - 40)
                         gegner_obj["y"] = -30
                         break
 
@@ -104,6 +106,9 @@ def client_thread(conn, spieler_id):
                 print(f"Fehler beim Senden an Spieler {spieler_id}. Verbindung wird geschlossen.")
                 conn.close()
                 return
+        except BlockingIOError:
+            # Keine Daten verfügbar, einfach weitermachen
+            continue
         except (ConnectionResetError, EOFError, pickle.UnpicklingError) as e:
             print(f"Verbindung zu Spieler {spieler_id} verloren: {e}")
             break
@@ -113,13 +118,21 @@ def client_thread(conn, spieler_id):
 def warte_auf_bereitschaft():
     """Warte, bis beide Spieler bereit sind."""
     global spieler_bereit
+    for conn in verbindungen:
+        conn.setblocking(False)  # Setze Verbindungen auf nicht blockierend
+
     while not all(spieler_bereit):  # Schleife, bis beide Spieler bereit sind
         for i, conn in enumerate(verbindungen):
+            if spieler_bereit[i]:  # Überspringe Spieler, die bereits bereit sind
+                continue
             try:
                 daten = pickle.loads(conn.recv(1024))  # Empfange Daten vom Spieler
                 if daten.get("bereit"):  # Spieler hat "Bereit" gesendet
                     spieler_bereit[i] = True
                     print(f"Spieler {i} ist bereit.")
+            except BlockingIOError:
+                # Keine Daten verfügbar, einfach weitermachen
+                continue
             except (ConnectionResetError, EOFError, pickle.UnpicklingError):
                 print(f"Verbindung zu Spieler {i} verloren.")
                 return False
