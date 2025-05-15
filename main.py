@@ -13,7 +13,7 @@ pygame.display.set_caption("Multiplayer Space Invader")              # Setzt den
 clock = pygame.time.Clock()                   # Erzeugt eine Uhr zur Steuerung der Framerate
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)             # Erstellt ein TCP/IP-Socket
-sock.connect(('192.168.2.176', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
+sock.connect(('127.0.0.1', 65432))                                   # Verbindet sich mit dem Server (hier lokal)
 
 def zeige_bereit_button(sock):
     """Zeigt den Bereit-Button an und ändert die Farbe, wenn der Spieler bereit ist."""
