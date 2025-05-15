@@ -50,15 +50,13 @@ def client_thread(conn, spieler_id):
             if not daten:
                 raise ConnectionResetError("Verbindung wurde vom Client geschlossen.")
             daten = pickle.loads(daten)
-            richtung = daten.get("richtung", (0, 0))
+            position = daten.get("position", (0, 0))  # Mausposition direkt übernehmen
             schuss = daten.get("schuss", False)
 
-            # Spielerbewegung
-            x, y = spielzustand[spieler_id]
-            x += richtung[0] * s.PLAYER_SPEED
-            y += richtung[1] * s.PLAYER_SPEED
-            x = max(0, min(s.SCREEN_WIDTH - 50, x))
-            y = max(0, min(s.SCREEN_HEIGHT - 30, y))
+            # Spielerposition direkt auf die empfangene Mausposition setzen
+            x, y = position
+            x = max(0, min(s.SCREEN_WIDTH - 50, x))  # Begrenze x innerhalb des Spielfelds
+            y = max(0, min(s.SCREEN_HEIGHT - 30, y))  # Begrenze y innerhalb des Spielfelds
             spielzustand[spieler_id] = (x, y)
 
             # Bullet hinzufügen

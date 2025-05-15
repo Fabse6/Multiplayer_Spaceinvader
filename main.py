@@ -106,23 +106,22 @@ while running:
         if event.type == pygame.QUIT:  # Wenn das Fenster geschlossen wird
             running = False  # Spielschleife beenden
 
-    keys = pygame.key.get_pressed()  # Tastenzustand abfragen
-    richtung = [0, 0]  # Standard: keine Bewegung
-    if keys[pygame.K_LEFT]:  # Pfeiltaste links
-        richtung[0] = -1
-    elif keys[pygame.K_RIGHT]:  # Pfeiltaste rechts
-        richtung[0] = 1
-    if keys[pygame.K_UP]:  # Pfeiltaste oben
-        richtung[1] = -1
-    elif keys[pygame.K_DOWN]:  # Pfeiltaste unten
-        richtung[1] = 1
+    # Mausposition abfragen
+    maus_position = pygame.mouse.get_pos()  # Liefert (x, y)-Koordinaten der Maus
 
-    schuss = keys[pygame.K_SPACE]  # Schuss-Taste (Leertaste)
+    # Spielerposition so anpassen, dass die Maus in der Mitte des Spielers ist
+    spieler_breite = spieler[0].rect.width
+    spieler_hoehe = spieler[0].rect.height
+    angepasste_position = (maus_position[0] - spieler_breite // 2, maus_position[1] - spieler_hoehe // 2)
 
-    nachricht = {"richtung": richtung, "schuss": schuss}  # Verpacke Eingabe in ein Dictionary
-    sock.sendall(pickle.dumps(nachricht))  # Sende die Daten serialisiert an den Server
+    # Nachricht mit angepasster Position erstellen
+    nachricht = {"position": angepasste_position, "schuss": pygame.mouse.get_pressed()[0]}  # Linksklick als Schuss
 
-    daten = pickle.loads(sock.recv(2048))  # Empfange aktualisierte Positionen vom Server
+    # Sende die Daten serialisiert an den Server
+    sock.sendall(pickle.dumps(nachricht))
+
+    # Empfange aktualisierte Positionen vom Server
+    daten = pickle.loads(sock.recv(2048))
     if daten.get("game_over"):  # Prüfe, ob das Spiel beendet werden soll
         print("Spiel beendet! Ein Spieler wurde getroffen.")
         zeige_game_over_menu(sock)  # Zeige das Game-Over-Menü
